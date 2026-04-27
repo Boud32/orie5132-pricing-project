@@ -1,0 +1,260 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+
+\title{Choice Modeling, Assortment Optimization, and Pricing}
+\author{ORIE 5132 Pricing Analytics and Revenue Management\\James, Fran, and Akhil}
+\date{April 27, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Data and Modeling Setup}
+
+The main dataset, \texttt{data.csv}, contains 153,009 displayed-hotel rows from 8,354 search queries. Each row corresponds to one hotel option shown to a customer, and the booking indicator identifies whether that hotel was booked. Each customer can book at most one hotel or make no purchase. The full data are used for choice-model estimation. The four smaller files \texttt{data1.csv}, \texttt{data2.csv}, \texttt{data3.csv}, and \texttt{data4.csv} are used for assortment optimization and pricing.
+
+The eight hotel features are star rating, review score, brand indicator, location score, accessibility score, log historical price, displayed price, and promotion flag. In all choice models, the no-purchase option is normalized to have utility zero.
+
+\section{Problem 1: MNL Estimation}
+
+For hotel $j$, the MNL utility and preference weight are
+\[
+u_j = \beta_0 + \sum_{i=1}^8 \beta_i x_{ji},
+\qquad
+v_j = \exp(u_j).
+\]
+Given displayed assortment $S$, the probability of choosing hotel $j$ is
+\[
+P(j \mid S) = \frac{v_j}{1 + \sum_{p \in S} v_p}.
+\]
+For a search query $q$, the log-likelihood contribution is
+\[
+\ell_q(\beta)
+= \sum_{j \in S_q} y_j u_j
+- \log\left(1 + \sum_{j \in S_q} \exp(u_j)\right).
+\]
+The estimated model converged with negative log-likelihood 20,611.3618.
+
+\begin{table}[H]
+\centering
+\caption{Problem 1 MNL coefficient estimates.}
+\begin{tabular}{lr}
+\toprule
+Parameter & Estimate \\
+\midrule
+Intercept & -2.8305 \\
+Star rating & 0.4771 \\
+Review score & 0.1214 \\
+Hotel brand & 0.2346 \\
+Location score & 0.0173 \\
+Accessibility score & 0.5521 \\
+Log historical price & -0.0367 \\
+Displayed price & -0.0073 \\
+Promotion flag & 0.4488 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The signs are economically sensible. Higher star rating, review score, brand status, accessibility, and promotions increase booking utility. Displayed price has the expected negative sign: a \$100 price increase reduces utility by roughly 0.73. Location score is close to zero, suggesting that this variable has limited marginal explanatory power after controlling for the other features. The positive accessibility coefficient is relatively large and may capture broader hotel desirability beyond pure accessibility.
+
+\section{Problem 2: Assortment Optimization under MNL}
+
+For a displayed subset $S$, expected revenue is
+\[
+R(S) = \frac{\sum_{j \in S} p_j v_j}{1 + \sum_{j \in S} v_j}.
+\]
+Under the standard MNL model, the optimal assortment is revenue ordered: hotels can be sorted by price, and hotels are added while the next price exceeds the current expected revenue.
+
+\begin{table}[H]
+\centering
+\caption{Optimal assortments under the Problem 1 MNL model.}
+\begin{tabular}{lrr}
+\toprule
+Dataset & Optimal assortment size & Expected revenue \\
+\midrule
+\texttt{data1.csv} & 18 & \$107.37 \\
+\texttt{data2.csv} & 10 & \$131.14 \\
+\texttt{data3.csv} & 18 & \$121.09 \\
+\texttt{data4.csv} & 11 & \$97.26 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\texttt{data2.csv} produces the highest expected revenue despite using only 10 hotels, indicating that the selected hotels combine strong preference weights with relatively high prices. \texttt{data4.csv} has the lowest expected revenue, consistent with a weaker price and preference-weight profile.
+
+\section{Problem 3: Pricing under MNL}
+
+When all hotels are displayed and prices can be changed, the first-order condition implies a common optimal price of the form
+\[
+p^* = R^* + \frac{1}{|\beta_p|},
+\]
+where $\beta_p$ is the price coefficient. Equivalently,
+\[
+p^* - R^* = \frac{1}{|\beta_p|}.
+\]
+Using the estimated price coefficient, the implied markup term is \$136.20 in all four datasets.
+
+\begin{table}[H]
+\centering
+\caption{Optimal uniform pricing under the Problem 1 MNL model.}
+\begin{tabular}{lrrr}
+\toprule
+Dataset & Optimal price & Expected revenue & Markup $1/|\beta_p|$ \\
+\midrule
+\texttt{data1.csv} & \$313.79 & \$177.59 & \$136.20 \\
+\texttt{data2.csv} & \$384.66 & \$248.47 & \$136.20 \\
+\texttt{data3.csv} & \$312.50 & \$176.31 & \$136.20 \\
+\texttt{data4.csv} & \$349.89 & \$213.70 & \$136.20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The optimal prices are higher than many observed displayed prices because this problem allows the firm to reset all prices rather than choose among existing listed prices. \texttt{data2.csv} again performs best, with the largest optimal price and revenue.
+
+\section{Problem 4: Mixture MNL for Early and Late Reservations}
+
+Customers are segmented by booking window. Type 1 customers are early customers with booking window at least 7 days, and type 2 customers are late customers with booking window less than 7 days. The estimated type probabilities are computed by unique search queries.
+
+\begin{table}[H]
+\centering
+\caption{Early and late reservation type shares.}
+\begin{tabular}{llrr}
+\toprule
+Type & Definition & Share & Searches \\
+\midrule
+Type 1 early & Booking window $\geq 7$ & 0.5431 & 4,537 \\
+Type 2 late & Booking window $< 7$ & 0.4569 & 3,817 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For type $k$, the utility and choice probability are
+\[
+u_{jk} = \beta_{0k} + \sum_i \beta_{ik} x_{ji},
+\qquad
+P(j \mid S) = \sum_{k=1}^2 \theta_k
+\frac{\exp(u_{jk})}{1+\sum_{p \in S}\exp(u_{pk})}.
+\]
+Separate MNL models were estimated for early and late customers. The early model converged with negative log-likelihood 11,052.5871 and the late model with negative log-likelihood 9,505.4483.
+
+\begin{table}[H]
+\centering
+\caption{Problem 4 coefficient comparison by reservation timing.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Parameter & Early coefficient & Late coefficient & Early minus late \\
+\midrule
+Intercept & -2.9747 & -2.7087 & -0.2661 \\
+Star rating & 0.4423 & 0.5399 & -0.0976 \\
+Review score & 0.1373 & 0.1052 & 0.0321 \\
+Hotel brand & 0.2089 & 0.2561 & -0.0472 \\
+Location score & -0.0160 & 0.0643 & -0.0802 \\
+Accessibility score & 0.7495 & 0.3292 & 0.4204 \\
+Log historical price & -0.0530 & -0.0177 & -0.0353 \\
+Displayed price & -0.0059 & -0.0093 & 0.0034 \\
+Promotion flag & 0.3829 & 0.5520 & -0.1691 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The most important difference is accessibility: early customers place much larger positive weight on accessibility. Late customers respond more strongly to star rating and promotion flags, and they are more price sensitive in magnitude. These patterns suggest that late customers may be more deal- and convenience-oriented, while early customers may be planning around specific hotel characteristics.
+
+\section{Problem 5: Early vs. Late Assortment Optimization}
+
+For the mixture model, the unknown-type assortment objective is
+\[
+R_{\text{mix}}(x)
+= \theta_1
+\frac{\sum_j x_j r_j v_{j1}}{1 + \sum_j x_j v_{j1}}
++ \theta_2
+\frac{\sum_j x_j r_j v_{j2}}{1 + \sum_j x_j v_{j2}}.
+\]
+The mixture assortment $S$ is solved as an integer program. For each type-specific assortment, $S_1$ and $S_2$, the single-type MNL revenue-ordered policy is used.
+
+\begin{table}[H]
+\centering
+\caption{Problem 5 assortment results for early vs. late reservations.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Dataset & $|S|$ & $|S_1|$ & $|S_2|$ & Mix rev. of $S$ & Type 1 gain & Type 2 gain \\
+\midrule
+\texttt{data1.csv} & 18 & 21 & 16 & 107.3022 & 0.2180 & 0.1015 \\
+\texttt{data2.csv} & 10 & 10 & 7 & 131.2551 & 0.0000 & 0.8907 \\
+\texttt{data3.csv} & 18 & 19 & 17 & 120.9905 & 0.0827 & 0.1186 \\
+\texttt{data4.csv} & 11 & 11 & 10 & 97.3784 & 0.0000 & 0.0611 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+All integer programs solved to optimality. Personalization improves expected revenue, but the gains are small. The largest gain appears for type 2 customers in \texttt{data2.csv}, where using the known-type assortment $S_2$ improves revenue by 0.8907 relative to the unknown-type assortment $S$ under the type 2 model. Overall, the mixture assortment is a good compromise when the arriving customer's type is unknown.
+
+\section{Problem 6: Alternative Customer Types}
+
+For the alternative mixture MNL, customers are segmented by whether the search is for a Saturday-night booking. Type 1 is Saturday-night searches and type 2 is non-Saturday-night searches. This segmentation is natural because Saturday travel often reflects different trip purpose and price sensitivity than non-Saturday travel.
+
+\begin{table}[H]
+\centering
+\caption{Saturday and non-Saturday type shares.}
+\begin{tabular}{llrr}
+\toprule
+Type & Definition & Share & Searches \\
+\midrule
+Type 1 Saturday & \texttt{srch\_saturday\_night\_bool = 1} & 0.5766 & 4,817 \\
+Type 2 non-Saturday & \texttt{srch\_saturday\_night\_bool = 0} & 0.4234 & 3,537 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Problem 6 coefficient comparison by Saturday-night status.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Parameter & Saturday coefficient & Non-Saturday coefficient & Difference \\
+\midrule
+Intercept & -2.8176 & -2.8543 & 0.0366 \\
+Star rating & 0.4220 & 0.5512 & -0.1293 \\
+Review score & 0.1211 & 0.1206 & 0.0005 \\
+Hotel brand & 0.2232 & 0.2464 & -0.0232 \\
+Location score & 0.0200 & 0.0116 & 0.0084 \\
+Accessibility score & 0.4535 & 0.6781 & -0.2245 \\
+Log historical price & -0.0334 & -0.0386 & 0.0052 \\
+Displayed price & -0.0064 & -0.0086 & 0.0023 \\
+Promotion flag & 0.4755 & 0.4194 & 0.0561 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The Saturday segmentation produces smaller behavioral differences than the early/late segmentation. Non-Saturday customers place more weight on star rating and accessibility and are more price sensitive. Saturday-night customers respond slightly more to promotions. Review score is nearly identical across the two types.
+
+\begin{table}[H]
+\centering
+\caption{Problem 6 assortment results for Saturday vs. non-Saturday types.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Dataset & $|S|$ & $|S_1|$ & $|S_2|$ & Mix rev. of $S$ & Type 1 gain & Type 2 gain \\
+\midrule
+\texttt{data1.csv} & 18 & 20 & 17 & 107.3573 & 0.0097 & 0.0020 \\
+\texttt{data2.csv} & 10 & 10 & 10 & 130.8967 & 0.0000 & 0.0000 \\
+\texttt{data3.csv} & 18 & 18 & 18 & 121.1894 & 0.0000 & 0.0000 \\
+\texttt{data4.csv} & 11 & 11 & 11 & 97.1815 & 0.0000 & 0.0000 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Repeating the Problem 5 assortment analysis under the Saturday/non-Saturday mixture shows almost no personalization gain. In three of the four datasets, the personalized assortments have the same sizes and revenues as the mixture assortment. This suggests that Saturday status affects estimated preferences, but not enough to materially change the optimal assortments in these small datasets.
+
+\section{Problem 7: Pending AI-Agent Results}
+
+Problem 7 will be completed after the AI-generated choices and held-out predictions are finalized. The final report should clearly state the AI agent and version used, the prompting workflow, the re-estimated AI-label MNL coefficients, and the predictive-accuracy comparison against the Problem 1 MNL model. No partial Problem 7 results are reported here.
+
+\end{document}
