@@ -253,8 +253,50 @@ Dataset & $|S|$ & $|S_1|$ & $|S_2|$ & Mix rev. of $S$ & Type 1 gain & Type 2 gai
 
 Repeating the Problem 5 assortment analysis under the Saturday/non-Saturday mixture shows almost no personalization gain. In three of the four datasets, the personalized assortments have the same sizes and revenues as the mixture assortment. This suggests that Saturday status affects estimated preferences, but not enough to materially change the optimal assortments in these small datasets.
 
-\section{Problem 7: Pending AI-Agent Results}
+\section{Problem 7: AI Agents as Customers}
 
-Problem 7 will be completed after the AI-generated choices and held-out predictions are finalized. The final report should clearly state the AI agent and version used, the prompting workflow, the re-estimated AI-label MNL coefficients, and the predictive-accuracy comparison against the Problem 1 MNL model. No partial Problem 7 results are reported here.
+For Problem 7, we used OpenAI \texttt{gpt-4o-mini} through the API as the AI agent. The prompt gave each search query's customer context and the displayed hotel attributes, then asked the model to choose one hotel row index or return \texttt{null} for no purchase. Because early testing showed that the model could over-purchase, the prompt included a running no-purchase calibration target of 30\%, approximately matching the empirical no-purchase rate in the human data.
+
+For Part A, the API run produced 8,096 explicit AI decisions from the 8,354 search queries. The explicit AI decisions had a no-purchase rate of 36.7\%, above the 30\% target. The AI-generated choices were converted into a synthetic booking column, and the MNL model from Problem 1 was re-estimated on that AI-labeled dataset.
+
+\begin{table}[H]
+\centering
+\caption{Problem 7 human vs. AI-generated MNL coefficients.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Parameter & Human coefficient & AI coefficient & AI minus human & Absolute difference \\
+\midrule
+Intercept & -2.8305 & -0.4137 & 2.4169 & 2.4169 \\
+Accessibility score & 0.5521 & 0.0206 & -0.5315 & 0.5315 \\
+Log historical price & -0.0367 & -0.5064 & -0.4697 & 0.4697 \\
+Location score & 0.0173 & -0.2690 & -0.2864 & 0.2864 \\
+Star rating & 0.4771 & 0.2102 & -0.2669 & 0.2669 \\
+Hotel brand & 0.2346 & -0.0136 & -0.2482 & 0.2482 \\
+Promotion flag & 0.4488 & 0.6234 & 0.1746 & 0.1746 \\
+Review score & 0.1214 & 0.2486 & 0.1272 & 0.1272 \\
+Displayed price & -0.0073 & -0.0037 & 0.0036 & 0.0036 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The AI-estimated coefficients differ substantially from the human-data coefficients. The AI model has a much less negative intercept, suggesting a higher baseline purchase tendency conditional on its generated choices, but the calibration still produced a higher no-purchase rate than the target. It also places much less weight on accessibility and star rating than the human model, reverses the sign of the brand coefficient, and places more positive weight on promotions and review score. Price remains negative, but the AI price sensitivity is smaller in magnitude than the human estimate. Overall, the AI-generated choices do not reproduce the human preference structure closely, even though some directional patterns remain plausible.
+
+For Part B, we used an 80/20 train-test split by search query. The AI agent received a small set of real training examples as context and predicted choices for held-out queries. We compared exact-choice accuracy: a prediction is correct only if it matches the actual booked hotel row index or correctly predicts no purchase. The held-out test set contained 1,671 queries; the API returned 1,654 explicit prediction rows, and the notebook comparison evaluated accuracy over the 1,671 held-out queries.
+
+\begin{table}[H]
+\centering
+\caption{Problem 7 held-out predictive accuracy.}
+\begin{tabular}{lrr}
+\toprule
+Model & Test queries & Exact-choice accuracy \\
+\midrule
+Problem 1 MNL & 1,671 & 0.092 \\
+AI agent (\texttt{gpt-4o-mini}) & 1,671 & 0.080 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The MNL model slightly outperformed the AI agent on exact-choice accuracy. Both accuracies are low because exact hotel prediction is a strict metric with many alternatives per query plus a no-purchase option. The result suggests that a general-purpose AI agent can generate structured choices, but it is not automatically a strong simulator or predictor of human hotel choice behavior from numeric attributes alone. The MNL model, despite its simplicity, is better aligned with the observed data-generating process in this setting.
 
 \end{document}
